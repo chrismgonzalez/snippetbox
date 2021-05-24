@@ -10,22 +10,39 @@ import (
 	"os"
 	"time"
 
+	"chrismgonzalez.com/snippetbox/pkg/models"
 	"chrismgonzalez.com/snippetbox/pkg/models/mysql"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/golangcollege/sessions"
 )
+
+type contextKey string
+
+const contextKeyIsAuthenticated = contextKey("isAuthenticated")
 type application struct {
+		debug bool
 		errorLog *log.Logger
 		infoLog *log.Logger
 		session *sessions.Session
-		snippets *mysql.SnippetModel
+		snippets interface {
+			Insert(string, string, string) (int, error)
+			Get(int) (*models.Snippet, error)
+			Latest() ([]*models.Snippet, error)
+		}
 		templateCache map[string]*template.Template
+		users interface {
+			Insert(string, string, string) error
+			Authenticate(string, string) (int, error)
+			Get(int) (*models.User, error)
+			ChangePassword(int, string, string) error
+		}
 	}
 
 func main() {
 	dsn := flag.String("dsn", "web:Sgcik634814!@/snippetbox?parseTime=true", "MySQL data source name")
 	addr := flag.String("addr", ":4000", "HTTP network address")
+	debug := flag.Bool("debug", false, "enable debug mode")
 	secret := flag.String("secret", "s6Ndh+pPbnzHbS*+9Pk8qGWhTzbpa@ge", "Secret key" )
 	flag.Parse()
 	infoLog := log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
@@ -49,11 +66,13 @@ func main() {
 	session.Secure = true
 
 	app := &application{
+		debug: *debug,
 		errorLog: errorLog,
 		infoLog: infoLog,
 		session: session,
 		snippets: &mysql.SnippetModel{DB: db,},
 		templateCache: templateCache,
+		users: &mysql.UserModel{DB: db},
 	}
 	tlsConfig := &tls.Config{
 		PreferServerCipherSuites: true,
